@@ -21,6 +21,16 @@ type Game struct {
 	minZoom float64
 	maxZoom float64
 
+	// Velocity для плавного движения
+	velocityX   float64
+	velocityY   float64
+	maxPanSpeed float64
+
+	// Для перетаскивания средней кнопкой
+	isDragging bool
+	dragLastX  int
+	dragLastY  int
+
 	accumulator float64
 	tickCount   int
 
@@ -32,15 +42,16 @@ func NewGame(world *sim.World) *Game {
 	height := world.Height
 
 	g := &Game{
-		world:   world,
-		image:   ebiten.NewImage(width, height),
-		pixels:  make([]byte, width*height*4),
-		cameraX: float64(width) / 2,
-		cameraY: float64(height) / 2,
-		zoom:    0.75,
-		minZoom: 0.1,
-		maxZoom: 10.0,
-		debug:   true,
+		world:       world,
+		image:       ebiten.NewImage(width, height),
+		pixels:      make([]byte, width*height*4),
+		cameraX:     float64(width) / 2,
+		cameraY:     float64(height) / 2,
+		zoom:        0.75,
+		minZoom:     0.1,
+		maxZoom:     10.0,
+		maxPanSpeed: 200,
+		debug:       true,
 	}
 
 	// Первый рендер
@@ -50,11 +61,30 @@ func NewGame(world *sim.World) *Game {
 }
 
 func (g *Game) Update() error {
+	dt := 1.0 / 60.0
+
 	// Обработка ввода
-	g.handleInput()
+	g.handleInput(dt)
+
+	// Применяем velocity к позиции камеры
+	g.cameraX += g.velocityX * dt
+	g.cameraY += g.velocityY * dt
+
+	// Плавное затухание velocity (трение)
+	// Коэффициент затухания: чем меньше, тем сильнее торможение
+	friction := 0.85
+	g.velocityX *= friction
+	g.velocityY *= friction
+
+	// Если скорость очень маленькая, обнуляем её
+	if absF(g.velocityX) < 0.5 {
+		g.velocityX = 0
+	}
+	if absF(g.velocityY) < 0.5 {
+		g.velocityY = 0
+	}
 
 	// Симуляция с фиксированным timestep
-	dt := 1.0 / 60.0
 	g.accumulator += dt
 
 	cfg := g.world.Config()
@@ -74,37 +104,83 @@ func (g *Game) Update() error {
 		needsRender = true
 	}
 
-	// Обновляем текстуру только если мир изменился
-	if needsRender {
+	// Обновляем текстуру только если мир изменился (или мы двигаемся)
+	if needsRender || g.velocityX != 0 || g.velocityY != 0 || g.isDragging {
 		g.updatePixels()
 	}
 
 	return nil
 }
 
-func (g *Game) handleInput() {
-	// Перемещение камеры
-	panSpeed := 5.0 / g.zoom
-
-	// Ускорение при зажатом Shift
-	if ebiten.IsKeyPressed(ebiten.KeyShift) {
-		panSpeed *= 5.0
+func (g *Game) handleInput(dt float64) {
+	// === Перетаскивание средней кнопкой мыши ===
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonMiddle) {
+		g.isDragging = true
+		g.dragLastX, g.dragLastY = ebiten.CursorPosition()
 	}
 
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonMiddle) {
+		g.isDragging = false
+	}
+
+	if g.isDragging {
+		cx, cy := ebiten.CursorPosition()
+		deltaX := cx - g.dragLastX
+		deltaY := cy - g.dragLastY
+
+		// Движение мыши в пикселях конвертируем в мировые координаты
+		g.cameraX -= float64(deltaX) / g.zoom
+		g.cameraY -= float64(deltaY) / g.zoom
+
+		g.dragLastX = cx
+		g.dragLastY = cy
+
+		// Во время перетаскивания обнуляем velocity (иначе будет инерция)
+		g.velocityX = 0
+		g.velocityY = 0
+	}
+
+	// === Ускорение ===
+	accelMultiplier := 1.0
+	if ebiten.IsKeyPressed(ebiten.KeyShift) {
+		accelMultiplier = 5.0
+	}
+
+	// Ускорение камеры (сила, которая меняет velocity)
+	// Делим на zoom, чтобы скорость в экранных пикселях была одинаковой при любом зуме
+	accel := 3000.0 * accelMultiplier / g.zoom
+
+	// === WASD с плавным ускорением ===
 	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
-		g.cameraY -= panSpeed
+		g.velocityY -= accel * dt
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
-		g.cameraY += panSpeed
+		g.velocityY += accel * dt
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
-		g.cameraX -= panSpeed
+		g.velocityX -= accel * dt
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
-		g.cameraX += panSpeed
+		g.velocityX += accel * dt
 	}
 
-	// Зум колесом мыши
+	// Ограничение максимальной скорости (в мировых координатах)
+	maxSpeed := g.maxPanSpeed / g.zoom
+
+	if g.velocityX > maxSpeed {
+		g.velocityX = maxSpeed
+	}
+	if g.velocityX < -maxSpeed {
+		g.velocityX = -maxSpeed
+	}
+	if g.velocityY > maxSpeed {
+		g.velocityY = maxSpeed
+	}
+	if g.velocityY < -maxSpeed {
+		g.velocityY = -maxSpeed
+	}
+
+	// === Зум колесом мыши (к курсору) ===
 	_, dy := ebiten.Wheel()
 	if dy != 0 {
 		zoomFactor := 1.1
@@ -114,30 +190,33 @@ func (g *Game) handleInput() {
 
 		newZoom := g.zoom * zoomFactor
 		if newZoom >= g.minZoom && newZoom <= g.maxZoom {
-			// Зум к курсору мыши
 			cx, cy := ebiten.CursorPosition()
 			screenW, screenH := ebiten.WindowSize()
 
+			// Точка мира под курсором до зума
 			worldX := (float64(cx)-float64(screenW)/2)/g.zoom + g.cameraX
 			worldY := (float64(cy)-float64(screenH)/2)/g.zoom + g.cameraY
 
 			g.zoom = newZoom
 
+			// Корректируем камеру, чтобы точка под курсором осталась на месте
 			g.cameraX = worldX - (float64(cx)-float64(screenW)/2)/g.zoom
 			g.cameraY = worldY - (float64(cy)-float64(screenH)/2)/g.zoom
 		}
 	}
 
-	// Переключение отладки
+	// === Переключение отладки ===
 	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
 		g.debug = !g.debug
 	}
 
-	// Сброс камеры
+	// === Сброс камеры ===
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
-		g.cameraX = float64(g.world.Width) / 2
-		g.cameraY = float64(g.world.Height) / 2
-		g.zoom = 1.0
+		g.cameraX = 0
+		g.cameraY = 0
+		g.velocityX = 0
+		g.velocityY = 0
+		g.zoom = 0.75
 	}
 }
 
@@ -258,4 +337,12 @@ func (g *Game) countCells() (alive, burning int) {
 	}
 
 	return alive, burning
+}
+
+// Вспомогательная функция для float64
+func absF(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

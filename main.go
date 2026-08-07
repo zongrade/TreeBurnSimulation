@@ -13,13 +13,13 @@ func main() {
 
 	cfg.Width = 1000
 	cfg.Height = 1000
-	cfg.TickRate = 120
+	cfg.TickRate = 160
 	cfg.WorkerCount = 12
 	cfg.Scheduler = sim.SchedulerDynamicChunks
 	cfg.Growth.SpawnRatePerSecond = 0.0005 // было 0.000005
-	cfg.Growth.GrowRatePerSecond = 0.2     // было 0.02
+	cfg.Growth.GrowRatePerSecond = 2.      // было 0.02
 	cfg.Fire.SpreadRadius = 2
-	cfg.Fire.BurnTicksPerHeight = 0.25
+	cfg.Fire.BurnTicksPerHeight = 0.35
 
 	world := sim.NewWorld(cfg)
 
