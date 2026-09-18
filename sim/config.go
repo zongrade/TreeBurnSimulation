@@ -13,6 +13,56 @@ const (
 	SchedulerMainSMT
 )
 
+type SaveFormat string
+
+const (
+	FormatPNG  SaveFormat = "png"
+	FormatJPEG SaveFormat = "jpeg"
+)
+
+type SaveConfig struct {
+	// Включить автосохранение изображений
+	Enabled bool
+
+	// Каждые сколько тиков сохранять
+	EveryTicks int
+
+	// Директория для сохранения
+	Dir string
+
+	// Префикс имени файла
+	Prefix string
+
+	// Количество цифр в имени файла
+	FilenameDigits int
+
+	// Писать логи в файл (если false - только в консоль/UI)
+	LogToFile bool
+
+	// Framerate для видео (0 = использовать TickRate)
+	VideoFramerate int
+
+	// Формат сохранения скриншотов
+	Format SaveFormat
+
+	// Качество для JPEG (0-100). Игнорируется для PNG.
+	Quality int
+
+	// Адаптивная запись при крупных пожарах
+	AdaptiveEnabled bool
+
+	// Порог числа горящих клеток для "крупного пожара"
+	// Если 0 - используется процентный порог
+	FireThreshold int
+
+	// Процент горящих клеток от общего числа деревьев для "крупного пожара"
+	// Используется если FireThreshold = 0
+	FirePercentThreshold float64
+
+	// Каждые сколько тиков сохранять при крупном пожаре
+	EveryTicksOnFire int
+}
+
 type GrowthConfig struct {
 	// Появление нового дерева на пустой клетке, событий в секунду.
 	SpawnRatePerSecond float64
@@ -70,8 +120,10 @@ type Config struct {
 	Growth    GrowthConfig
 	Lightning LightningConfig
 	Fire      FireConfig
+	Save      SaveConfig
 }
 
+// TODO: добавить меню настроек, с возможностью редактировать параметры
 func DefaultConfig() Config {
 	return Config{
 		Width:       1000,
@@ -99,6 +151,22 @@ func DefaultConfig() Config {
 			DiagonalFactor:      0.7,
 			BurnBaseTicks:       20,
 			BurnTicksPerHeight:  0.5,
+		},
+
+		Save: SaveConfig{
+			Enabled:              false,
+			EveryTicks:           100, // каждые 100 тиков (10 секунд при 10 TPS)
+			Dir:                  "screenshots",
+			Prefix:               "sim",
+			FilenameDigits:       4,
+			LogToFile:            false,
+			VideoFramerate:       60,
+			Format:               FormatJPEG,
+			Quality:              85,
+			AdaptiveEnabled:      true,
+			FireThreshold:        100,
+			FirePercentThreshold: 0.1,
+			EveryTicksOnFire:     160,
 		},
 	}
 }

@@ -44,6 +44,8 @@ type World struct {
 
 	orthoWeight int
 	diagWeight  int
+
+	burningCount int // количество горящих клеток
 }
 
 func NewWorld(cfg Config) *World {
@@ -107,6 +109,9 @@ func (w *World) Tick() {
 	w.Burns, w.NextBurns = w.NextBurns, w.Burns
 
 	w.tick++
+
+	// Пересчитываем количество горящих клеток
+	w.updateBurningCount()
 }
 
 func (w *World) precompute() {
@@ -453,6 +458,50 @@ func (w *World) applyLightning(dt float64) {
 	}
 }
 
+// Config возвращает конфигурацию мира.
+func (w *World) Config() Config {
+	return w.cfg
+}
+
+// BurningCount возвращает текущее количество горящих клеток.
+func (w *World) BurningCount() int {
+	return w.burningCount
+}
+
+// updateBurningCount пересчитывает количество горящих клеток.
+func (w *World) updateBurningCount() {
+	count := 0
+	width := w.Width
+	height := w.Height
+	stride := w.Stride
+
+	for y := 1; y <= height; y++ {
+		base := y * stride
+		for x := 1; x <= width; x++ {
+			if w.Burns[base+x] > 0 {
+				count++
+			}
+		}
+	}
+
+	w.burningCount = count
+}
+
+// TickRate возвращает количество тиков в секунду.
+func (w *World) TickRate() int {
+	return w.cfg.TickRate
+}
+
+// FireConfig возвращает конфиг пожара.
+func (w *World) FireConfig() FireConfig {
+	return w.cfg.Fire
+}
+
+// SaveConfig возвращает конфиг сохранения.
+func (w *World) SaveConfig() SaveConfig {
+	return w.cfg.Save
+}
+
 func poisson(lambda float64, r *rng) int {
 	if lambda <= 0 {
 		return 0
@@ -495,21 +544,6 @@ func probabilityThreshold(p float64) uint64 {
 	}
 
 	return uint64(p * float64(math.MaxUint64))
-}
-
-// Config возвращает конфигурацию мира.
-func (w *World) Config() Config {
-	return w.cfg
-}
-
-// TickRate возвращает количество тиков в секунду.
-func (w *World) TickRate() int {
-	return w.cfg.TickRate
-}
-
-// FireConfig возвращает конфиг пожара.
-func (w *World) FireConfig() FireConfig {
-	return w.cfg.Fire
 }
 
 func abs(x int) int {
