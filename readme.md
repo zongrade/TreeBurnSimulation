@@ -87,7 +87,7 @@ burnTicks = BurnBaseTicks + height * BurnTicksPerHeight
 ## Установка и запуск
 
 ```bash
-git clone https://github.com/aiqw/treeburnsimulation.git
+git clone https://github.com/zongrade/treeburnsimulation.git
 cd treeburnsimulation
 
 go get github.com/hajimehoshi/ebiten/v2
