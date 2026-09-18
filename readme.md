@@ -13,7 +13,7 @@
 <details>
   <summary>Демонстрация симуляции</summary>
   <br>
-  <video src="docs/demo.mp4" autoplay loop muted playsinline  width="100%"></video>
+  <video src="https://github.com/user-attachments/assets/eec681a0-bd29-4bee-86e1-587b5a738f3f" autoplay loop muted playsinline  width="100%"></video>
 </details>
 
 ---
